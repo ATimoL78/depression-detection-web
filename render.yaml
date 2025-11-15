@@ -11,4 +11,30 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DOUBAO_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        value: https://ark.cn-beijing.volces.com/api/v3
+      - key: OPENAI_MODEL
+        value: ep-20241115031255-xnfmq
+      - key: DATABASE_URL
+        fromDatabase:
+          name: depression-detection-db
+          property: connectionString
+      - key: COMPRESSION_ENABLED
+        value: true
+      - key: CACHE_ENABLED
+        value: true
+      - key: LOG_LEVEL
+        value: info
+      - key: CORS_ORIGIN
+        value: "*"
     healthCheckPath: /
+
+databases:
+  - name: depression-detection-db
+    plan: free
+    databaseName: depression_detection
+    user: depression_user
