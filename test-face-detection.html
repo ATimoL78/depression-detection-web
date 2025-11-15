@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>面部识别测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #video {
+            width: 100%;
+            max-width: 640px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+        #canvas {
+            width: 100%;
+            max-width: 640px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+        .video-container {
+            position: relative;
+            display: inline-block;
+        }
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        pre {
+            background: #272822;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 面部识别功能测试</h1>
+        
+        <div class="test-section">
+            <h2>1. 摄像头访问测试</h2>
+            <button id="testCamera">测试摄像头</button>
+            <button id="stopCamera" disabled>停止摄像头</button>
+            <div id="cameraStatus"></div>
+            <div class="video-container" style="margin-top: 10px;">
+                <video id="video" autoplay playsinline muted></video>
+                <canvas id="canvas" class="overlay"></canvas>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>2. MediaPipe资源检查</h2>
+            <button id="checkMediaPipe">检查MediaPipe文件</button>
+            <div id="mediapipeStatus"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>3. 系统信息</h2>
+            <div id="systemInfo"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>4. 测试日志</h2>
+            <pre id="logs"></pre>
+        </div>
+    </div>
+
+    <script>
+        const logs = [];
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}`;
+            logs.push(logMessage);
+            document.getElementById('logs').textContent = logs.join('\n');
+            console.log(logMessage);
+        }
+
+        // 系统信息
+        document.getElementById('systemInfo').innerHTML = `
+            <div class="status info">
+                <strong>浏览器:</strong> ${navigator.userAgent}<br>
+                <strong>支持getUserMedia:</strong> ${navigator.mediaDevices ? '✅ 是' : '❌ 否'}<br>
+                <strong>支持Canvas:</strong> ${document.createElement('canvas').getContext ? '✅ 是' : '❌ 否'}<br>
+                <strong>HTTPS:</strong> ${location.protocol === 'https:' ? '✅ 是' : '⚠️ 否 (localhost除外)'}<br>
+            </div>
+        `;
+
+        // 测试摄像头
+        let stream = null;
+        document.getElementById('testCamera').addEventListener('click', async () => {
+            const statusDiv = document.getElementById('cameraStatus');
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            
+            try {
+                log('开始请求摄像头权限...');
+                statusDiv.innerHTML = '<div class="status info">⏳ 正在请求摄像头权限...</div>';
+                
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: "user"
+                    }
+                });
+                
+                log('✅ 摄像头访问成功');
+                video.srcObject = stream;
+                
+                video.onloadedmetadata = () => {
+                    log(`视频尺寸: ${video.videoWidth}x${video.videoHeight}`);
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    
+                    statusDiv.innerHTML = `
+                        <div class="status success">
+                            ✅ 摄像头启动成功<br>
+                            分辨率: ${video.videoWidth}x${video.videoHeight}<br>
+                            帧率: ${stream.getVideoTracks()[0].getSettings().frameRate || 'N/A'} fps
+                        </div>
+                    `;
+                    
+                    document.getElementById('testCamera').disabled = true;
+                    document.getElementById('stopCamera').disabled = false;
+                    
+                    // 简单的人脸框绘制测试
+                    drawTestBox();
+                };
+                
+            } catch (error) {
+                log(`❌ 摄像头错误: ${error.message}`);
+                statusDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ 摄像头访问失败<br>
+                        错误: ${error.name} - ${error.message}
+                    </div>
+                `;
+            }
+        });
+
+        // 停止摄像头
+        document.getElementById('stopCamera').addEventListener('click', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                document.getElementById('video').srcObject = null;
+                document.getElementById('cameraStatus').innerHTML = '<div class="status info">摄像头已停止</div>';
+                document.getElementById('testCamera').disabled = false;
+                document.getElementById('stopCamera').disabled = true;
+                log('摄像头已停止');
+            }
+        });
+
+        // 绘制测试框
+        function drawTestBox() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            function draw() {
+                if (!stream) return;
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 绘制中心测试框
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                const boxSize = 200;
+                
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(centerX - boxSize/2, centerY - boxSize/2, boxSize, boxSize);
+                
+                ctx.fillStyle = '#00ff00';
+                ctx.font = '16px Arial';
+                ctx.fillText('请将面部对准此框', centerX - 80, centerY - boxSize/2 - 10);
+                
+                requestAnimationFrame(draw);
+            }
+            
+            draw();
+        }
+
+        // 检查MediaPipe文件
+        document.getElementById('checkMediaPipe').addEventListener('click', async () => {
+            const statusDiv = document.getElementById('mediapipeStatus');
+            statusDiv.innerHTML = '<div class="status info">⏳ 正在检查MediaPipe文件...</div>';
+            
+            const files = [
+                '/mediapipe/face_mesh.js',
+                '/mediapipe/face_mesh_solution_simd_wasm_bin.wasm',
+                '/mediapipe/face_mesh_solution_wasm_bin.wasm',
+                '/mediapipe/face_mesh_solution_packed_assets.data'
+            ];
+            
+            let html = '<div class="status info"><strong>MediaPipe文件检查:</strong><br>';
+            let allOk = true;
+            
+            for (const file of files) {
+                try {
+                    const response = await fetch(file, { method: 'HEAD' });
+                    if (response.ok) {
+                        html += `✅ ${file} (${response.headers.get('content-length')} bytes)<br>`;
+                        log(`✅ ${file} 存在`);
+                    } else {
+                        html += `❌ ${file} (HTTP ${response.status})<br>`;
+                        log(`❌ ${file} 不存在`);
+                        allOk = false;
+                    }
+                } catch (error) {
+                    html += `❌ ${file} (网络错误)<br>`;
+                    log(`❌ ${file} 检查失败: ${error.message}`);
+                    allOk = false;
+                }
+            }
+            
+            html += '</div>';
+            statusDiv.innerHTML = html;
+            
+            if (allOk) {
+                log('✅ 所有MediaPipe文件检查通过');
+            } else {
+                log('⚠️ 部分MediaPipe文件缺失或无法访问');
+            }
+        });
+
+        log('测试页面加载完成');
+    </script>
+</body>
+</html>
